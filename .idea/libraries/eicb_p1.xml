@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="eicb-p1">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/P1/eicb-p1.zip!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
