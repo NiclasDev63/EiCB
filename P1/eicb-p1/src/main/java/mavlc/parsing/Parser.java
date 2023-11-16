@@ -358,6 +358,7 @@ public final class Parser {
 		List<Expression> actualParameters = new ArrayList<>();
 		actualParameters.add(parseExpr());
 			while (currentToken.type == COMMA){
+				acceptIt();
 				actualParameters.add(parseExpr());
 			}
 		
@@ -393,7 +394,7 @@ public final class Parser {
 		accept(FOREACH);
 		accept(LPAREN);
 		IteratorDeclaration iterator = parseIteratorDeclaration();
-		accept(SEMICOLON);
+		accept(COLON);
 		Expression struct = parseExpr();
 		accept(RPAREN);
 		Statement body = parseStatement();
@@ -535,30 +536,39 @@ public final class Parser {
 
 		switch (currentToken.type) {
 			case LANGLE:
+				acceptIt();
 				comparison = LESS;
+				x = new Compare(location, x, parseAddSub(), comparison);
 				break;
 			case RANGLE:
+				acceptIt();
 			    comparison = GREATER;
+				x = new Compare(location, x, parseAddSub(), comparison);
 				break;
 			case CMPLE:
+				acceptIt();
 			    comparison = LESS_EQUAL;
+				x = new Compare(location, x, parseAddSub(), comparison);
 				break;
 			case CMPGE:
+				acceptIt();
 			    comparison = GREATER_EQUAL;
+				x = new Compare(location, x, parseAddSub(), comparison);
 				break;
 			case CMPEQ:
+				acceptIt();
 			    comparison = EQUAL;
+				x = new Compare(location, x, parseAddSub(), comparison);
 				break;
 			case CMPNE:
+				acceptIt();
 			    comparison = NOT_EQUAL;
+				x = new Compare(location, x, parseAddSub(), comparison);
 				break;
-			default:
-			throw new SyntaxError(currentToken, LANGLE, RANGLE, CMPLE, CMPEQ, CMPGE, CMPNE);
-		}
-		acceptIt();
-		Expression y = parseAddSub();
 
-		return new Compare(location, x, y, comparison);
+		}
+
+		return x;
 	}
 	
 	private Expression parseAddSub() {
