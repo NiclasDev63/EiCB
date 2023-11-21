@@ -301,12 +301,25 @@ public final class Parser {
 	
 	private ReturnStatement parseReturn() {
 		// TODO implement (task 1.6)
-		throw new UnsupportedOperationException();
+		SourceLocation location = currentToken.sourceLocation;
+		accept(RETURN);
+		Expression expr = parseExpr();
+		accept(SEMICOLON);
+		return new ReturnStatement(location, expr);
 	}
 	
 	private Statement parseAssignOrCall() {
 		// TODO implement (task 1.6)
-		throw new UnsupportedOperationException();
+		SourceLocation location = currentToken.sourceLocation;
+		Statement statement;
+		String id = accept(ID);
+		if(currentToken.type == ASSIGN) {
+			statement = parseAssign(id, location);
+		} else {
+			statement = new CallStatement(location, parseCall(id, location));
+		}
+		accept(SEMICOLON);
+		return statement;
 	}
 	
 	private VariableAssignment parseAssign(String name, SourceLocation location) {
@@ -331,8 +344,9 @@ public final class Parser {
 	
 	private CallExpression parseCall(String name, SourceLocation location) {
 		// TODO implement (task 1.6)
-		accept(LPAREN);
 		ArrayList<Expression> expressionList = new ArrayList<>();
+
+		accept(LPAREN);
 		if(currentToken.type != RPAREN) {
 			expressionList.add(parseExpr());
 			while(currentToken.type != RPAREN) {
@@ -340,6 +354,7 @@ public final class Parser {
 				expressionList.add(parseExpr());
 			}
 		}
+		accept(RPAREN);
 		return new CallExpression(location, name, expressionList);
 	}
 	
@@ -393,17 +408,42 @@ public final class Parser {
 	
 	private SwitchStatement parseSwitch() {
 		// TODO implement (task 1.7)
-		throw new UnsupportedOperationException();
+		SourceLocation location = currentToken.sourceLocation;
+		ArrayList<Case> cases = new ArrayList<>();
+		ArrayList<Default> defaults = new ArrayList<>();
+		accept(SWITCH);
+		accept(LPAREN);
+		Expression condition = parseExpr();
+		accept(RPAREN);
+		accept(LBRACE);
+		while(currentToken.type == CASE ||currentToken.type == DEFAULT) {
+			if(currentToken.type == CASE) {
+				cases.add(parseCase());
+			} else {
+				defaults.add(parseDefault());
+			}
+		}
+		accept(RBRACE);
+		return new SwitchStatement(location, condition, cases, defaults);
 	}
 	
 	private Case parseCase() {
 		// TODO implement (task 1.7)
-		throw new UnsupportedOperationException();
+		SourceLocation location = currentToken.sourceLocation;
+		accept(CASE);
+		Expression condition = parseExpr();
+		accept(COLON);
+		Statement statement = parseStatement();
+		return new Case(location, condition, statement);
 	}
 	
 	private Default parseDefault() {
 		// TODO implement (task 1.7)
-		throw new UnsupportedOperationException();
+		SourceLocation location = currentToken.sourceLocation;
+		accept(DEFAULT);
+		accept(COLON);
+		Statement statement = parseStatement();
+		return new Default(location, statement);
 	}
 	
 	private CompoundStatement parseCompound() {
@@ -473,12 +513,13 @@ public final class Parser {
 	private Expression parseCompare() throws SyntaxError{
 		// TODO implement (task 1.2)
 		SourceLocation location = currentToken.sourceLocation;
-		Expression expr = parseAddSub();
 		ArrayList<Token.TokenType> validOperations = new ArrayList<>(Arrays.asList(RANGLE, LANGLE, CMPLE, CMPGE, CMPEQ, CMPNE));
+
+		Expression expr = parseAddSub();
 		while(validOperations.contains(currentToken.type)) {
 			Token.TokenType currentType = currentToken.type;
 			acceptIt();
-			Expression expr2 = parseMulDiv();
+			Expression expr2 = parseAddSub();
 			switch (currentType) {
 				case RANGLE:
 					expr = new Compare(location, expr, expr2, GREATER);
@@ -509,8 +550,8 @@ public final class Parser {
 	private Expression parseAddSub() {
 		// TODO implement (task 1.2)
 		SourceLocation location = currentToken.sourceLocation;
-		Expression expr = parseMulDiv();
 
+		Expression expr = parseMulDiv();
 		while(currentToken.type == ADD || currentToken.type == SUB) {
 			Token.TokenType currentType = currentToken.type;
 			acceptIt();
@@ -528,12 +569,12 @@ public final class Parser {
 	private Expression parseMulDiv() {
 		// TODO implement (task 1.2)
 		SourceLocation location = currentToken.sourceLocation;
-		Expression expr = parseUnaryMinus();
 
+		Expression expr = parseUnaryMinus();
 		while(currentToken.type == MULT || currentToken.type == DIV) {
 			Token.TokenType currentType = currentToken.type;
 			acceptIt();
-			Expression expr2 = parseMulDiv();
+			Expression expr2 = parseUnaryMinus();
 			if(currentType == MULT) {
 				expr = new Multiplication(location, expr, expr2);
 			} else {
