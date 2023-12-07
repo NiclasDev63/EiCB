@@ -1,5 +1,7 @@
 /*.zip
 build/
+bin/
+gradle/
 
 # Compiled class file
 *.class
