@@ -24,13 +24,9 @@ import mavlc.syntax.statement.*;
 import mavlc.syntax.type.*;
 import mavlc.type.*;
 
-import java.lang.reflect.Parameter;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-
-import javax.lang.model.type.PrimitiveType;
-import javax.swing.text.html.HTMLDocument.Iterator;
 
 /* TODO enter group information
  *
@@ -182,10 +178,8 @@ public class ContextualAnalysis extends AstNodeBaseVisitor<Type, Void> {
 		Set<String> elementNames = new HashSet<>();
 		for(RecordElementDeclaration element : recordTypeDeclaration.elements) {
 			element.accept(this);
-			// two elements with the same name
 			if(!elementNames.add(element.name))
 				throw new RecordElementError(recordTypeDeclaration, recordTypeDeclaration.name, element.name);
-			// records cannot contain records
 			if(!element.getType().isMemberType())
 				throw new RecordElementError(recordTypeDeclaration, recordTypeDeclaration.name, element.name);
 		}
@@ -219,7 +213,6 @@ public class ContextualAnalysis extends AstNodeBaseVisitor<Type, Void> {
 	public Type visitVariableAssignment(VariableAssignment variableAssignment, Void __) {
 		Type lhs = variableAssignment.identifier.accept(this);
         Type rhs = variableAssignment.value.accept(this);
-        
         checkType(variableAssignment, lhs, rhs);
         return null;
 		
@@ -233,7 +226,7 @@ public class ContextualAnalysis extends AstNodeBaseVisitor<Type, Void> {
             throw new ConstantAssignmentError(leftHandIdentifier, declaration);
 
         leftHandIdentifier.setDeclaration(declaration);
-        return  declaration.getType();
+        return declaration.getType();
 	}
 	
 	@Override
@@ -243,35 +236,26 @@ public class ContextualAnalysis extends AstNodeBaseVisitor<Type, Void> {
         checkType(matrixLhsIdentifier, xType, IntType.instance);
         checkType (matrixLhsIdentifier, yType, IntType.instance);
 
+		
 		Declaration declaration = table.getDeclaration(matrixLhsIdentifier.name);
+		
+		if (! declaration.isVariable())
+			throw new ConstantAssignmentError(matrixLhsIdentifier, declaration);
+
         if (! (declaration.getType() instanceof MatrixType))
                 throw new InapplicableOperationError(matrixLhsIdentifier, declaration.getType(),MatrixType.class);
-		
+
 		int declaredX = ((MatrixType) declaration.getType()).cols;
 		int declaredY = ((MatrixType) declaration.getType()).rows;
 
 		int x = evalConstExpr(matrixLhsIdentifier.colIndexExpression);
 		int y = evalConstExpr(matrixLhsIdentifier.rowIndexExpression);
 
-		// if (x < 0 || x >= declaredX)
-		// 	throw new StructureDimensionError(matrixLhsIdentifier, x, declaredX);
-		// if (y < 0 || y >= declaredY)
-		// 	throw new StructureDimensionError(matrixLhsIdentifier, y, declaredY);
+		if (x < 0 || x >= declaredX)
+			throw new StructureDimensionError(matrixLhsIdentifier, x, declaredX);
+		if (y < 0 || y >= declaredY)
+			throw new StructureDimensionError(matrixLhsIdentifier, y, declaredY);
 		
-		if (x < 0)
-            throw new StructureDimensionError(matrixLhsIdentifier, x, 0);
-
-        if (x >= declaredX)
-            throw new StructureDimensionError(matrixLhsIdentifier, x, declaredX);
-
-        if (y < 0)
-            throw new StructureDimensionError(matrixLhsIdentifier, y, 0);
-
-        if (y >= declaredY) 
-            throw new StructureDimensionError(matrixLhsIdentifier, y, declaredY);
-		
-		if (! declaration.isVariable())
-			throw new ConstantAssignmentError(matrixLhsIdentifier, declaration);
 
 		matrixLhsIdentifier.setDeclaration(declaration);
 		return ((MatrixType) declaration.getType()).elementType;
@@ -331,7 +315,6 @@ public class ContextualAnalysis extends AstNodeBaseVisitor<Type, Void> {
 	
 	@Override
 	public Type visitForLoop(ForLoop forLoop, Void __) {
-	
 		Declaration initVarDecl = table.getDeclaration(forLoop.initVarName);
  		if(!initVarDecl.isVariable()){
  			throw new ConstantAssignmentError(forLoop, initVarDecl);
@@ -341,8 +324,8 @@ public class ContextualAnalysis extends AstNodeBaseVisitor<Type, Void> {
 		Type initValType = forLoop.initExpression.accept(this);
 		checkType(forLoop, initVarType, initValType);
 	
-		Type testType = forLoop.loopCondition.accept(this);
-		checkType(forLoop, testType, BoolType.instance);
+		Type condType = forLoop.loopCondition.accept(this);
+		checkType(forLoop, condType, BoolType.instance);
 
 		Declaration incrVarDecl = table.getDeclaration(forLoop.incrVarName);
 		if(!incrVarDecl.isVariable()){
@@ -490,68 +473,52 @@ public class ContextualAnalysis extends AstNodeBaseVisitor<Type, Void> {
 		if(!(rightOp instanceof StructType)){
 			throw new InapplicableOperationError(matrixMultiplication, rightOp, MatrixType.class, VectorType.class);
 		}
-		else{
-			checkType(matrixMultiplication, ((StructType) leftOp).elementType, ((StructType) rightOp).elementType);
-			elementType = ((StructType) leftOp).elementType;
-		}
-		int lm = -1;
-		int n = -1;
+
+		checkType(matrixMultiplication, ((StructType) leftOp).elementType, ((StructType) rightOp).elementType);
+		elementType = ((StructType) leftOp).elementType;
+
+		int leftX = -1;
+		int leftY = -1;
 		if(leftOp instanceof MatrixType){
-			// Y-Dimension = Number of columns in the matrix
-			lm = ((MatrixType) leftOp).rows;
-			// X-Dimension = Number of rows in the matrix
-			n = ((MatrixType) leftOp).cols;
+			leftX = ((MatrixType) leftOp).cols;
+			leftY = ((MatrixType) leftOp).rows;
 		}
 		else if(leftOp instanceof VectorType){
-			/*
-			 * Vector implicitly treated as row-vector, 
-			 * dimension = number of columns
-			 */
-			lm = ((VectorType) leftOp).dimension;
-			n = 1;
+			leftX = 1;
+			leftY = ((VectorType) leftOp).dimension;
 		}
-		int rm = -1;
-		int p = -1;
+		int rightX = -1;
+		int rightY = -1;
 		if(rightOp instanceof MatrixType){
-			rm = ((MatrixType) rightOp).cols;
-			p = ((MatrixType) rightOp).rows;
+			rightX = ((MatrixType) rightOp).cols;
+			rightY = ((MatrixType) rightOp).rows;
 		}
 		if(rightOp instanceof VectorType){
-			/*
-			 * Vector implicitly treated as column-vector,
-			 * dimension = number of rows
-			 */
-			rm = ((VectorType) rightOp).dimension;
-			p = 1;
+			rightX = ((VectorType) rightOp).dimension;
+			rightY = 1;
 		}
-		if(lm != rm){
-			throw new StructureDimensionError(matrixMultiplication, lm, rm);
+		if(leftY != rightX){
+			throw new StructureDimensionError(matrixMultiplication, leftY, rightX);
 		}
-		if(n==1){
-			// Only one row in the first operand
-			if(p==1){
-				// Only one column in the second operand, result is just a single element
+		if(leftX==1){
+			if(rightY==1){
 				matrixMultiplication.setType(elementType);
 				return elementType;
 			}
 			else{
-				// More than one column in the second operand, result is a vector of p elements
-				VectorType resultType = new VectorType(elementType, p);
+				VectorType resultType = new VectorType(elementType, rightY);
 				matrixMultiplication.setType(resultType);
 				return resultType;
 			}
 		}
 		else{
-			// More than one row in the first operand
-			if(p==1){
-				// Only one column in the second operand, result is a vector of n elements
-				VectorType resultType = new VectorType(elementType, n);
+			if(rightY==1){
+				VectorType resultType = new VectorType(elementType, leftX);
 				matrixMultiplication.setType(resultType);
 				return resultType;
 			}
 			else{
-				// More than one column in the second operand, result is a matrix of nxp elements
-				MatrixType resultType = new MatrixType(elementType, n, p);
+				MatrixType resultType = new MatrixType(elementType, leftX, rightY);
 				matrixMultiplication.setType(resultType);
 				return resultType;
 			}
@@ -754,24 +721,28 @@ public class ContextualAnalysis extends AstNodeBaseVisitor<Type, Void> {
 	public Type visitCallExpression(CallExpression callExpression, Void __) {
 		Function callee = env.getFunctionDeclaration(callExpression.functionName);
 
-		if(callee == null) {
-			throw new RuntimeException("Function " + callExpression.functionName + " is not declared");
-		}
 		if(callExpression.actualParameters.size() != callee.parameters.size()){
 			throw new ArgumentCountError(callExpression, callee, callee.parameters.size(), 
 			callExpression.actualParameters.size());
 		}
+
 		for(int i = 0; i < callExpression.actualParameters.size(); i++){
 			Type actualType = callExpression.actualParameters.get(i).accept(this);
 			Type formalType = callee.parameters.get(i).getType();
-			if(formalType == null) {
-				throw new RuntimeException("Type of parameter " + callee.parameters.get(i).name + " is not set");
+			if(formalType instanceof RecordType) {
+				RecordTypeDeclaration decl = env.getRecordTypeDeclaration(((RecordType) formalType).name);
+				formalType = decl.accept(this);
 			}
+
 			checkType(callExpression, actualType, formalType);
 		}
-		
+
 		callExpression.setCalleeDefinition(callee);
 		callExpression.setType(callee.getReturnType());
+		if (callee.getReturnType() instanceof RecordType) {
+			RecordTypeDeclaration decl = env.getRecordTypeDeclaration(((RecordType) callee.getReturnType()).name);
+			callee.setReturnType(decl.accept(this));
+		}
 		return callee.getReturnType();
 	}
 	

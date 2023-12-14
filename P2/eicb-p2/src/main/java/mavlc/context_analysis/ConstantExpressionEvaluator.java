@@ -11,8 +11,6 @@
  ******************************************************************************/
 package mavlc.context_analysis;
 
-import org.xmlunit.diff.Comparison;
-
 import mavlc.errors.NonConstantExpressionError;
 import mavlc.syntax.AstNode;
 import mavlc.syntax.AstNodeBaseVisitor;
@@ -39,60 +37,39 @@ public class ConstantExpressionEvaluator extends AstNodeBaseVisitor<Integer, Voi
 	public Integer visitIntValue(IntValue intValue, Void __) {
 		return intValue.value;
 	}
-	
 
-	@Override
-	public Integer visitBinaryExpression(BinaryExpression binaryExpression, Void __) {
-		int left = binaryExpression.leftOperand.accept(this);
-		int right = binaryExpression.rightOperand.accept(this);
-		if (binaryExpression instanceof And) {
-			return left & right;
-		} else if (binaryExpression instanceof Or) {
-			return left | right;
-		} else if (binaryExpression instanceof Addition) {
-			return left + right;
-		} else if (binaryExpression instanceof Subtraction) {
-			return left - right;
-		} else if (binaryExpression instanceof Multiplication) {
-			return left * right;
-		} else if (binaryExpression instanceof Division) {
-			return left / right;
-		} else if (binaryExpression instanceof Exponentiation) {
-			return (int) Math.pow(left, right);
-		} else if (binaryExpression instanceof Compare) {
-			Compare comp = (Compare) binaryExpression;
-			switch (comp.comparator) {
-			case LESS:
-				return left < right ? 1 : 0;
-			case GREATER:
-				return left > right ? 1 : 0;
-			case LESS_EQUAL:
-				return left <= right ? 1 : 0;
-			case GREATER_EQUAL:
-				return left >= right ? 1 : 0;
-			case NOT_EQUAL:
-				return left != right ? 1 : 0;
-			case EQUAL:
-				return left == right ? 1 : 0;
-			default:
-				throw new RuntimeException("Unsupported comparator: " + comp.comparator);
-		}
-		} else {
-			throw new RuntimeException("Unsupported binary operator: " + binaryExpression);
-		}
+	public Integer visitExponentiation(Exponentiation exponentiation, Void __) {
+		int left = exponentiation.leftOperand.accept(this);
+		int right = exponentiation.rightOperand.accept(this);
+		return (int) Math.pow(left, right);
 	}
-	
 
-	@Override	
-	public Integer visitUnaryExpression(UnaryExpression unaryExpression, Void __) {
-		int operand = unaryExpression.operand.accept(this);
-		
-		if (unaryExpression instanceof UnaryMinus) {
-			return -operand;
-		} else if (unaryExpression instanceof Not) {
-			return operand == 0 ? 1 : 0;
-		} else {
-			throw new RuntimeException("Unsupported unary operator: " + unaryExpression);
-		}
+	public Integer visitAddition(Addition addition, Void __) {
+		int left = addition.leftOperand.accept(this);
+		int right = addition.rightOperand.accept(this);
+		return left + right;
+	}
+
+	public Integer visitSubtraction(Subtraction subtraction, Void __) {
+		int left = subtraction.leftOperand.accept(this);
+		int right = subtraction.rightOperand.accept(this);
+		return left - right;
+	}
+
+	public Integer visitMultiplication(Multiplication multiplication, Void __) {
+		int left = multiplication.leftOperand.accept(this);
+		int right = multiplication.rightOperand.accept(this);
+		return left * right;
+	}
+
+	public Integer visitDivision(Division division, Void __) {
+		int left = division.leftOperand.accept(this);
+		int right = division.rightOperand.accept(this);
+		return (int) left / right;
+	}
+
+	public Integer visitUnaryMinus(UnaryMinus unaryMinus, Void __) {
+		int operand = unaryMinus.operand.accept(this);
+		return -operand;
 	}
 }
