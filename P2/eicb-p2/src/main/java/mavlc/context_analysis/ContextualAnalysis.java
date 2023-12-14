@@ -720,12 +720,14 @@ public class ContextualAnalysis extends AstNodeBaseVisitor<Type, Void> {
 	@Override
 	public Type visitCallExpression(CallExpression callExpression, Void __) {
 		Function callee = env.getFunctionDeclaration(callExpression.functionName);
-
+		Type fType = callee.accept(this);
+		
+		
 		if(callExpression.actualParameters.size() != callee.parameters.size()){
 			throw new ArgumentCountError(callExpression, callee, callee.parameters.size(), 
 			callExpression.actualParameters.size());
 		}
-
+		
 		for(int i = 0; i < callExpression.actualParameters.size(); i++){
 			Type actualType = callExpression.actualParameters.get(i).accept(this);
 			Type formalType = callee.parameters.get(i).getType();
@@ -733,17 +735,18 @@ public class ContextualAnalysis extends AstNodeBaseVisitor<Type, Void> {
 				RecordTypeDeclaration decl = env.getRecordTypeDeclaration(((RecordType) formalType).name);
 				formalType = decl.accept(this);
 			}
-
+			
 			checkType(callExpression, actualType, formalType);
 		}
-
+		
 		callExpression.setCalleeDefinition(callee);
 		callExpression.setType(callee.getReturnType());
+
 		if (callee.getReturnType() instanceof RecordType) {
 			RecordTypeDeclaration decl = env.getRecordTypeDeclaration(((RecordType) callee.getReturnType()).name);
 			callee.setReturnType(decl.accept(this));
 		}
-		return callee.getReturnType();
+		return fType;
 	}
 	
 	@Override
