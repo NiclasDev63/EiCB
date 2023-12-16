@@ -719,34 +719,31 @@ public class ContextualAnalysis extends AstNodeBaseVisitor<Type, Void> {
 
 	@Override
 	public Type visitCallExpression(CallExpression callExpression, Void __) {
-		Function callee = env.getFunctionDeclaration(callExpression.functionName);
-		Type fType = callee.accept(this);
-		
-		
-		if(callExpression.actualParameters.size() != callee.parameters.size()){
-			throw new ArgumentCountError(callExpression, callee, callee.parameters.size(), 
-			callExpression.actualParameters.size());
-		}
-		
-		for(int i = 0; i < callExpression.actualParameters.size(); i++){
-			Type actualType = callExpression.actualParameters.get(i).accept(this);
-			Type formalType = callee.parameters.get(i).getType();
-			if(formalType instanceof RecordType) {
-				RecordTypeDeclaration decl = env.getRecordTypeDeclaration(((RecordType) formalType).name);
-				formalType = decl.accept(this);
-			}
+			Function f = env.getFunctionDeclaration(callExpression.functionName);
+		List<FormalParameter> expectedParameters = f.parameters;
 			
-			checkType(callExpression, actualType, formalType);
+		int exprParamSize = callExpression.actualParameters.size();
+		int functParamSize = f.parameters.size();
+		if(exprParamSize != functParamSize)
+			throw new ArgumentCountError(callExpression, f, functParamSize, exprParamSize);
+		
+		
+		int i = 0;
+		for(Expression expr: callExpression.actualParameters) {
+			if(!expectedParameters.get(i).isTypeSet()) {
+				expectedParameters.get(i).setType(expectedParameters.get(i).typeSpecifier.accept(this));
+			}
+			checkType(callExpression, expr.accept(this), expectedParameters.get(i).getType());
+			i++;
 		}
 		
-		callExpression.setCalleeDefinition(callee);
-		callExpression.setType(callee.getReturnType());
-
-		if (callee.getReturnType() instanceof RecordType) {
-			RecordTypeDeclaration decl = env.getRecordTypeDeclaration(((RecordType) callee.getReturnType()).name);
-			callee.setReturnType(decl.accept(this));
+		if(!f.isReturnTypeSet()) {
+			f.setReturnType(f.returnTypeSpecifier.accept(this));
 		}
-		return fType;
+		if(!callExpression.isCalleeDefinitionSet())
+		callExpression.setCalleeDefinition(f);
+		callExpression.setType(f.getReturnType());
+		return f.getReturnType();
 	}
 	
 	@Override
