@@ -16,11 +16,10 @@ import mavlc.syntax.AstNode;
 import mavlc.syntax.AstNodeBaseVisitor;
 import mavlc.syntax.expression.*;
 
-/* TODO enter group information
- *
- * EiCB group number: ...
+/* 
+ * EiCB group number: 35
  * Names and matriculation numbers of all group members:
- * ...
+ * Matias Heredia Novillo 2371009, Anastasia Paschalidou 2368876, Niclas Gregor 2637756
  */
 
 public class ConstantExpressionEvaluator extends AstNodeBaseVisitor<Integer, Void> {

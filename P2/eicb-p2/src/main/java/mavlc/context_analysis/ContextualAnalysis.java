@@ -28,11 +28,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/* TODO enter group information
- *
- * EiCB group number: ...
+/*
+ * EiCB group number: 35
  * Names and matriculation numbers of all group members:
- * ...
+ * Matias Heredia Novillo 2371009, Anastasia Paschalidou 2368876, Niclas Gregor 2637756
  */
 
 /** A combined identification and type checking visitor. */
