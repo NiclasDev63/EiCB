@@ -225,7 +225,7 @@ public class CodeGenerator extends AstNodeBaseVisitor<Instruction, Void> {
 			totalSize += element.getType().wordSize;
 		}
 
-		assembler.loadIntegerValue(totalSize);
+		assembler.loadIntegerValue(totalSize + offset);
 
 		assembler.emitIntegerAddition();
 
@@ -276,10 +276,80 @@ public class CodeGenerator extends AstNodeBaseVisitor<Instruction, Void> {
 	@Override
 	public Instruction visitForEachLoop(ForEachLoop forEachLoop, Void __) {
 		// TODO implement (task 3.5)
-		int size = forEachLoop.structExpression.getType().wordSize;
-
-		visit(forEachLoop.structExpression);
-
+		int offset = assembler.getNextOffset();
+		IteratorDeclaration iterator = forEachLoop.iteratorDeclaration;
+		Expression structExpression = forEachLoop.structExpression;
+		int elementCount = structExpression.getType().wordSize;
+		int baseAddress = assembler.getNextOffset();
+		boolean popStruct = false;
+		
+		if(structExpression instanceof IdentifierReference) {
+			baseAddress = ((IdentifierReference) structExpression).getDeclaration().getLocalBaseOffset();
+		} else {
+			popStruct = true;
+			visit(structExpression);
+			assembler.setNextOffset(assembler.getNextOffset() + elementCount);
+		}
+		
+		assembler.loadIntegerValue(0);
+		assembler.setNextOffset(assembler.getNextOffset() + 1);
+		iterator.setLocalBaseOffset(assembler.getNextOffset());
+		assembler.setNextOffset(assembler.getNextOffset() + 1);
+		
+		// loop condition (i < structExpression.wordSize)
+		int loopCondition = assembler.getNextInstructionAddress();
+		// ..., i
+		assembler.loadValue(Register.ST, 1, -1);
+		// ..., i, i
+		assembler.loadIntegerValue(elementCount);
+		// ..., i, i, count
+		assembler.emitIntegerComparison(Comparison.LESS);
+		// ..., i, bool
+		Instruction jumpToEnd = assembler.emitConditionalJump(false, -1);
+		// ..., i
+		
+		// loop body
+		{
+			// ..., i
+			assembler.loadValue(Register.ST, 1, -1);
+			// ..., i, i
+			assembler.loadAddress(Register.LB, baseAddress);
+			// ..., i, i, &struct
+			assembler.emitIntegerAddition();
+			// ..., i, &struct[i]
+			assembler.loadFromStackAddress(1);
+			// ..., i, cur
+			
+			int nextOffset = assembler.getNextOffset();
+			visit(forEachLoop.body);
+			assembler.resetNextOffset(nextOffset);
+			
+			if(iterator.isVariable()) {
+				// ..., i, cur
+				assembler.loadValue(Register.ST, 1, -2);
+				// ..., i, cur, i
+				assembler.loadAddress(Register.LB, baseAddress);
+				// ..., i, cur, i, &struct
+				assembler.emitIntegerAddition();
+				// ..., i, cur, &struct[i]
+				assembler.storeToStackAddress(1);
+				// ..., i
+			} else {
+				// ..., i, cur
+				assembler.emitPop(0, 1);
+				// ..., i
+			}
+			// ..., i
+			assembler.emitIncrement();
+			// ..., i+1
+		}
+		assembler.emitJump(loopCondition);
+		
+		int loopEnd = assembler.getNextInstructionAddress();
+		assembler.backPatchJump(jumpToEnd, loopEnd);
+		
+		assembler.emitPop(0, 1);
+		assembler.setNextOffset(offset);
 		return null;
 	}
 	
@@ -418,6 +488,12 @@ public class CodeGenerator extends AstNodeBaseVisitor<Instruction, Void> {
 		visit(matrixMultiplication.leftOperand);
 		visit(matrixMultiplication.rightOperand);
 		MatrixType leftType = (MatrixType) matrixMultiplication.leftOperand.getType();
+		MatrixType rightType = (MatrixType) matrixMultiplication.rightOperand.getType();
+
+		assembler.loadIntegerValue(leftType.rows);
+		assembler.loadIntegerValue(leftType.cols);
+		assembler.loadIntegerValue(rightType.cols);
+
 		if(leftType.elementType.equals(IntType.instance))
 			assembler.emitIntegerMatrixMultiplication();
 		else
@@ -641,14 +717,8 @@ public class CodeGenerator extends AstNodeBaseVisitor<Instruction, Void> {
 	
 	@Override
 	public Instruction visitSubtraction(Subtraction subtraction, Void __) {
-		visit(subtraction.leftOperand);
-		visit(subtraction.rightOperand);
-		if(subtraction.leftOperand.getType().equals(IntType.instance)) {
-			assembler.emitIntegerSubtraction();
-		} else {
-			assembler.emitFloatSubtraction();
-		}
-		throw new UnsupportedOperationException();
+		visitArithmeticOperator(subtraction, false, false, true, Primitive.subI, Primitive.subF);
+		return null;
 	}
 	
 	@Override
@@ -760,13 +830,67 @@ public class CodeGenerator extends AstNodeBaseVisitor<Instruction, Void> {
 	@Override
 	public Instruction visitElementSelect(ElementSelect elementSelect, Void __) {
 		// TODO implement (task 3.7)
-		throw new UnsupportedOperationException();
+		StructType structType = (StructType) elementSelect.structExpression.getType();
+		Type resultType = elementSelect.getType();
+		int structSize = structType.wordSize;
+		int resultSize = resultType.wordSize;
+		int upperBound = structSize / resultSize;
+		
+		visit(elementSelect.structExpression);
+		// ..., struct
+		assembler.loadAddress(Register.ST, -structSize);
+		// ..., struct, &struct
+		visit(elementSelect.indexExpression);
+		assembler.emitBoundsCheck(0, upperBound);
+		// ..., struct, &struct, index
+		if(resultSize != 1) {
+			assembler.loadIntegerValue(resultSize);
+			assembler.emitIntegerMultiplication();
+		}
+		assembler.emitIntegerAddition();
+		// ..., struct, &struct[index]
+		assembler.loadFromStackAddress(resultSize);
+		// ..., struct, result
+		assembler.emitPop(resultSize, structSize);
+		// ..., result
+		return null;
 	}
 	
 	@Override
 	public Instruction visitRecordElementSelect(RecordElementSelect recordElementSelect, Void __) {
 		// TODO implement (task 3.6)
-		throw new UnsupportedOperationException();
+		RecordType recordType = (RecordType) recordElementSelect.recordExpression.getType();
+		int resultSize = recordElementSelect.getType().wordSize;
+		int recordSize = recordType.wordSize;
+		int upperBound = recordType.typeDeclaration.elements.size();
+		int offset = recordType.typeDeclaration.getElementOffset(recordElementSelect.elementName);
+		
+		//assembler.loadAddress(null, offset);
+		visit(recordElementSelect.recordExpression);
+		// ..., record
+		assembler.loadAddress(Register.ST, -recordSize);
+		// ..., record, &record
+		assembler.loadIntegerValue(offset);
+		assembler.emitBoundsCheck(0, upperBound);
+		// ..., record, &record, elementOffset
+		
+		int sizeOfRecord = 0;
+		for(int i=0; i<offset ; i++) {
+			if(recordType.typeDeclaration.elements.get(i).getType() instanceof StructType) {
+				sizeOfRecord = sizeOfRecord + recordType.typeDeclaration.elements.get(i).getType().wordSize;
+				sizeOfRecord = sizeOfRecord-1;
+			}
+		}
+		
+		assembler.loadIntegerValue(0);
+		assembler.emitIntegerAddition();
+		assembler.emitIntegerAddition();
+		// ..., record, &record@elementOffset
+		assembler.loadFromStackAddress(resultSize);
+		// ..., record, result
+		assembler.emitPop(resultSize, recordSize);
+		// ..., result
+		return null;
 	}
 	
 	@Override
