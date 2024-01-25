@@ -30,11 +30,10 @@ import mtam.interpreter.Value;
 import java.util.ArrayList;
 import java.util.List;
 
-/* TODO enter group information
- *
- * EiCB group number: ...
+/*
+ * EiCB group number: 35
  * Names and matriculation numbers of all group members:
- * ...
+ * Matias Heredia Novillo 2371009, Anastasia Paschalidou 2368876, Niclas Gregor 2637756
  */
 
 public class CodeGenerator extends AstNodeBaseVisitor<Instruction, Void> {
@@ -216,7 +215,6 @@ public class CodeGenerator extends AstNodeBaseVisitor<Instruction, Void> {
 	@Override
 	public Instruction visitRecordLhsIdentifier(RecordLhsIdentifier recordLhsIdentifier, Void __) {
 		int offset = recordLhsIdentifier.getDeclaration().getLocalBaseOffset();
-		int wordSize = recordLhsIdentifier.getDeclaration().getType().wordSize;
 		int elementWordSize = ((RecordType) recordLhsIdentifier.getDeclaration().getType()).typeDeclaration.getElement(recordLhsIdentifier.elementName).getType().wordSize;
 		int elementOffset = ((RecordType) recordLhsIdentifier.getDeclaration().getType()).typeDeclaration.getElementOffset(recordLhsIdentifier.elementName);
 
@@ -286,6 +284,7 @@ public class CodeGenerator extends AstNodeBaseVisitor<Instruction, Void> {
 			assembler.setNextOffset(assembler.getNextOffset() + elementCount);
 		}
 		
+		
 		assembler.loadIntegerValue(0);
 		assembler.setNextOffset(assembler.getNextOffset() + 1);
 		iterator.setLocalBaseOffset(assembler.getNextOffset());
@@ -345,6 +344,7 @@ public class CodeGenerator extends AstNodeBaseVisitor<Instruction, Void> {
 		
 		assembler.emitPop(0, 1);
 		assembler.setNextOffset(offset);
+
 		return null;
 	}
 	
