@@ -70,6 +70,7 @@ public class CodeGenerator extends AstNodeBaseVisitor<Instruction, Void> {
 		return null;
 	}
 	
+	
 	@Override
 	public Instruction visitFunction(Function functionNode, Void __) {
 		assembler.addNewFunction(functionNode);
@@ -90,6 +91,7 @@ public class CodeGenerator extends AstNodeBaseVisitor<Instruction, Void> {
 		
 		return null;
 	}
+
 
 	@Override
 	public Instruction visitValueDefinition(ValueDefinition valueDefinition, Void __) {
@@ -119,9 +121,9 @@ public class CodeGenerator extends AstNodeBaseVisitor<Instruction, Void> {
 
 		visit(variableAssignment.identifier);
 
-		int wordSize = variableAssignment.identifier.getDeclaration().getType().wordSize;
+		// int wordSize = variableAssignment.identifier.getDeclaration().getType().wordSize;
 
-		assembler.storeToStackAddress(wordSize);
+		// assembler.storeToStackAddress(wordSize);
 
 		return null;
 	}
@@ -129,27 +131,28 @@ public class CodeGenerator extends AstNodeBaseVisitor<Instruction, Void> {
 	@Override
 	public Instruction visitLeftHandIdentifier(LeftHandIdentifier leftHandIdentifier, Void __) {
 		int offset = leftHandIdentifier.getDeclaration().getLocalBaseOffset();
+		int wordSize = leftHandIdentifier.getDeclaration().getType().wordSize;
 		assembler.loadAddress(Register.LB, offset);
+		assembler.storeToStackAddress(wordSize);
 		return null;
 	}
 	
 	@Override
 	public Instruction visitMatrixLhsIdentifier(MatrixLhsIdentifier matrixLhsIdentifier, Void __) {
-		//TODO muss hier wordSize miteinberechnet werden ? 
 		int offset = matrixLhsIdentifier.getDeclaration().getLocalBaseOffset();
-		int wordSize = matrixLhsIdentifier.getDeclaration().getType().wordSize;
+		int elementWordSize = ((MatrixType) matrixLhsIdentifier.getDeclaration().getType()).elementType.wordSize;
 		int rowCount = ((MatrixType) matrixLhsIdentifier.getDeclaration().getType()).rows;
 		int colCount = ((MatrixType) matrixLhsIdentifier.getDeclaration().getType()).cols;
 
-		int totalSize = rowCount * colCount * wordSize;
-
-		// to compute the address of the selected index, we need to calcualte (rowIndex * colCount + colIndex) * wordSize
+		// to compute the address of the selected index, we need to calculate offset + (rowIndex * colCount + colIndex) * elementWordSize
 
 		//push colCount to stack
 		assembler.loadIntegerValue(colCount);
 		
 		//push rowIndex to stack
 		visit(matrixLhsIdentifier.rowIndexExpression);
+
+		assembler.emitBoundsCheck(0, rowCount);
 		
 		//calc rowIndex * colCount
 		assembler.emitIntegerMultiplication();
@@ -157,53 +160,55 @@ public class CodeGenerator extends AstNodeBaseVisitor<Instruction, Void> {
 		//push colIndex to stack
 		visit(matrixLhsIdentifier.colIndexExpression);
 
+		assembler.emitBoundsCheck(0, colCount);
+
 		//calc (rowIndex * colCount + colIndex)
 		assembler.emitIntegerAddition();
 		
-		//push wordSize to stack
-		assembler.loadIntegerValue(wordSize);
+		//push elementWordSize to stack
+		assembler.loadIntegerValue(elementWordSize);
 		
-		//calc (rowIndex * colCount + colIndex) * wordSize
+		//calc (rowIndex * colCount + colIndex) * elementWordSize
 		assembler.emitIntegerMultiplication();
 
 		//push offset to stack
 		assembler.loadAddress(Register.LB, offset);
 
-		//add offset to (rowIndex * colCount + colIndex) * wordSize, to get the address of the selected index
+		//add offset to (rowIndex * colCount + colIndex) * elementWordSize, to get the address of the selected index
 		assembler.emitIntegerAddition();
 
-		//check if the selected element is in bounds
-		assembler.emitBoundsCheck(offset, totalSize);
+		assembler.storeToStackAddress(elementWordSize);
 
-		return null;
+        return null;
 	}
 	
 	@Override
 	public Instruction visitVectorLhsIdentifier(VectorLhsIdentifier vectorLhsIdentifier, Void __) {
-		//TODO muss hier wordSize miteinberechnet werden ? 
 		int offset = vectorLhsIdentifier.getDeclaration().getLocalBaseOffset();
-		int wordSize = vectorLhsIdentifier.getDeclaration().getType().wordSize;
+		int elementWordSize = ((VectorType) vectorLhsIdentifier.getDeclaration().getType()).elementType.wordSize;
 		int dimension = ((VectorType) vectorLhsIdentifier.getDeclaration().getType()).dimension;
 
-		int totalSize = dimension * wordSize;
+		int totalSize = dimension * elementWordSize;
 
 		//push index to stack
 		visit(vectorLhsIdentifier.indexExpression);
 
-		//push wordSize to stack
-		assembler.loadIntegerValue(wordSize);
+		//push elementWordSize to stack
+		assembler.loadIntegerValue(elementWordSize);
 
-		//calc index * wordSize
+		//calc index * elementWordSize
 		assembler.emitIntegerMultiplication();
 
 		//push offset to stack
 		assembler.loadAddress(Register.LB, offset);
 
-		//add offset to index * wordSize, to get the address of the selected index
+		//add offset to index * elementWordSize, to get the address of the selected index
 		assembler.emitIntegerAddition();
 		
 		//check if the selected element is in bounds
 		assembler.emitBoundsCheck(offset, totalSize);
+
+		assembler.storeToStackAddress(elementWordSize);
 
 		return null;
 	}
@@ -211,28 +216,20 @@ public class CodeGenerator extends AstNodeBaseVisitor<Instruction, Void> {
 	@Override
 	public Instruction visitRecordLhsIdentifier(RecordLhsIdentifier recordLhsIdentifier, Void __) {
 		int offset = recordLhsIdentifier.getDeclaration().getLocalBaseOffset();
+		int wordSize = recordLhsIdentifier.getDeclaration().getType().wordSize;
+		int elementOffset = ((RecordType) recordLhsIdentifier.getDeclaration().getType()).typeDeclaration.getElementOffset(recordLhsIdentifier.elementName);
 
 		assembler.loadAddress(Register.LB, offset);
 
-		List<RecordElementDeclaration> elements = ((RecordType) recordLhsIdentifier.getDeclaration().getType()).typeDeclaration.elements;
-
-		int totalSize = 0;
-
-		for(RecordElementDeclaration element : elements){
-			if(element.name.equals(recordLhsIdentifier.elementName)){
-				break;
-			}
-			totalSize += element.getType().wordSize;
-		}
-
-		assembler.loadIntegerValue(totalSize + offset);
+		assembler.loadIntegerValue(elementOffset);
 
 		assembler.emitIntegerAddition();
 
-		assembler.emitBoundsCheck(offset, totalSize);
+		assembler.storeToStackAddress(wordSize);
 
 		return null;
 	}
+	
 	
 	@Override
 	public Instruction visitForLoop(ForLoop forLoop, Void __) {
@@ -275,18 +272,15 @@ public class CodeGenerator extends AstNodeBaseVisitor<Instruction, Void> {
 	
 	@Override
 	public Instruction visitForEachLoop(ForEachLoop forEachLoop, Void __) {
-		// TODO implement (task 3.5)
 		int offset = assembler.getNextOffset();
 		IteratorDeclaration iterator = forEachLoop.iteratorDeclaration;
 		Expression structExpression = forEachLoop.structExpression;
 		int elementCount = structExpression.getType().wordSize;
 		int baseAddress = assembler.getNextOffset();
-		boolean popStruct = false;
 		
 		if(structExpression instanceof IdentifierReference) {
 			baseAddress = ((IdentifierReference) structExpression).getDeclaration().getLocalBaseOffset();
 		} else {
-			popStruct = true;
 			visit(structExpression);
 			assembler.setNextOffset(assembler.getNextOffset() + elementCount);
 		}
@@ -388,7 +382,7 @@ public class CodeGenerator extends AstNodeBaseVisitor<Instruction, Void> {
 		}
 		return null;
 	}
-	
+
 	@Override
 	public Instruction visitCallStatement(CallStatement callStatement, Void __) {
 		visit(callStatement.callExpression);
@@ -430,7 +424,7 @@ public class CodeGenerator extends AstNodeBaseVisitor<Instruction, Void> {
 		
 		for(Case namedCase : switchCaseStatement.cases) {
 			// place switch condition on the stack
-			assembler.loadIntegerValue(localSize);
+			assembler.loadAddress(Register.LB, localSize);
 			assembler.loadFromStackAddress(1);
 			// save jump to backpatch later
 			jumps.add(visit(namedCase));
@@ -485,10 +479,11 @@ public class CodeGenerator extends AstNodeBaseVisitor<Instruction, Void> {
 	
 	@Override
 	public Instruction visitMatrixMultiplication(MatrixMultiplication matrixMultiplication, Void __) {
-		visit(matrixMultiplication.leftOperand);
-		visit(matrixMultiplication.rightOperand);
 		MatrixType leftType = (MatrixType) matrixMultiplication.leftOperand.getType();
 		MatrixType rightType = (MatrixType) matrixMultiplication.rightOperand.getType();
+
+		visit(matrixMultiplication.leftOperand);
+		visit(matrixMultiplication.rightOperand);
 
 		assembler.loadIntegerValue(leftType.rows);
 		assembler.loadIntegerValue(leftType.cols);
@@ -820,16 +815,13 @@ public class CodeGenerator extends AstNodeBaseVisitor<Instruction, Void> {
 	
 	@Override
 	public Instruction visitCallExpression(CallExpression callExpression, Void __) {
-		for(Expression arg : callExpression.actualParameters){
-			arg.accept(this, null);
-		}
+		callExpression.actualParameters.forEach(this::visit);
 		assembler.emitFunctionCall(callExpression.getCalleeDefinition());
 		return null;
 	}
 	
 	@Override
 	public Instruction visitElementSelect(ElementSelect elementSelect, Void __) {
-		// TODO implement (task 3.7)
 		StructType structType = (StructType) elementSelect.structExpression.getType();
 		Type resultType = elementSelect.getType();
 		int structSize = structType.wordSize;
@@ -847,6 +839,7 @@ public class CodeGenerator extends AstNodeBaseVisitor<Instruction, Void> {
 			assembler.loadIntegerValue(resultSize);
 			assembler.emitIntegerMultiplication();
 		}
+
 		assembler.emitIntegerAddition();
 		// ..., struct, &struct[index]
 		assembler.loadFromStackAddress(resultSize);
@@ -858,37 +851,28 @@ public class CodeGenerator extends AstNodeBaseVisitor<Instruction, Void> {
 	
 	@Override
 	public Instruction visitRecordElementSelect(RecordElementSelect recordElementSelect, Void __) {
-		// TODO implement (task 3.6)
 		RecordType recordType = (RecordType) recordElementSelect.recordExpression.getType();
-		int resultSize = recordElementSelect.getType().wordSize;
 		int recordSize = recordType.wordSize;
-		int upperBound = recordType.typeDeclaration.elements.size();
 		int offset = recordType.typeDeclaration.getElementOffset(recordElementSelect.elementName);
+		int elementSize = recordType.typeDeclaration.getElement(recordElementSelect.elementName).getType().wordSize;
+		int upperBound = recordType.typeDeclaration.elements.stream()
+		.mapToInt(element -> element.getType().wordSize)
+		.sum();
 		
 		//assembler.loadAddress(null, offset);
 		visit(recordElementSelect.recordExpression);
 		// ..., record
-		assembler.loadAddress(Register.ST, -recordSize);
+		assembler.loadAddress(Register.ST, -1 * recordSize);
 		// ..., record, &record
 		assembler.loadIntegerValue(offset);
 		assembler.emitBoundsCheck(0, upperBound);
 		// ..., record, &record, elementOffset
-		
-		int sizeOfRecord = 0;
-		for(int i=0; i<offset ; i++) {
-			if(recordType.typeDeclaration.elements.get(i).getType() instanceof StructType) {
-				sizeOfRecord = sizeOfRecord + recordType.typeDeclaration.elements.get(i).getType().wordSize;
-				sizeOfRecord = sizeOfRecord-1;
-			}
-		}
-		
-		assembler.loadIntegerValue(0);
 		assembler.emitIntegerAddition();
-		assembler.emitIntegerAddition();
+
 		// ..., record, &record@elementOffset
-		assembler.loadFromStackAddress(resultSize);
+		assembler.loadFromStackAddress(elementSize);
 		// ..., record, result
-		assembler.emitPop(resultSize, recordSize);
+		assembler.emitPop(elementSize, recordSize);
 		// ..., result
 		return null;
 	}
