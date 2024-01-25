@@ -1,3 +1,13 @@
+file:///C:/Users/nicla/Desktop/UNI/EiCB/P3/eicb-p3/src/main/java/mavlc/codegen/tam/CodeGenerator.java
+### java.util.NoSuchElementException: next on empty iterator
+
+occurred in the presentation compiler.
+
+action parameters:
+offset: 7297
+uri: file:///C:/Users/nicla/Desktop/UNI/EiCB/P3/eicb-p3/src/main/java/mavlc/codegen/tam/CodeGenerator.java
+text:
+```scala
 /*******************************************************************************
  * Copyright (c) 2016-2019 Embedded Systems and Applications Group
  * Department of Computer Science, Technische Universitaet Darmstadt,
@@ -216,8 +226,7 @@ public class CodeGenerator extends AstNodeBaseVisitor<Instruction, Void> {
 	@Override
 	public Instruction visitRecordLhsIdentifier(RecordLhsIdentifier recordLhsIdentifier, Void __) {
 		int offset = recordLhsIdentifier.getDeclaration().getLocalBaseOffset();
-		int wordSize = recordLhsIdentifier.getDeclaration().getType().wordSize;
-		int elementWordSize = ((RecordType) recordLhsIdentifier.getDeclaration().getType()).typeDeclaration.getElement(recordLhsIdentifier.elementName).getType().wordSize;
+		int wordSize = recordLhsIdentifier.getDeclara@@tion().getType().wordSize;
 		int elementOffset = ((RecordType) recordLhsIdentifier.getDeclaration().getType()).typeDeclaration.getElementOffset(recordLhsIdentifier.elementName);
 
 		assembler.loadAddress(Register.LB, offset);
@@ -226,7 +235,7 @@ public class CodeGenerator extends AstNodeBaseVisitor<Instruction, Void> {
 
 		assembler.emitIntegerAddition();
 
-		assembler.storeToStackAddress(elementWordSize);
+		assembler.storeToStackAddress(wordSize);
 
 		return null;
 	}
@@ -1062,3 +1071,25 @@ public class CodeGenerator extends AstNodeBaseVisitor<Instruction, Void> {
 		return null;
 	}
 }
+
+```
+
+
+
+#### Error stacktrace:
+
+```
+scala.collection.Iterator$$anon$19.next(Iterator.scala:973)
+	scala.collection.Iterator$$anon$19.next(Iterator.scala:971)
+	scala.collection.mutable.MutationTracker$CheckedIterator.next(MutationTracker.scala:76)
+	scala.collection.IterableOps.head(Iterable.scala:222)
+	scala.collection.IterableOps.head$(Iterable.scala:222)
+	scala.collection.AbstractIterable.head(Iterable.scala:933)
+	dotty.tools.dotc.interactive.InteractiveDriver.run(InteractiveDriver.scala:168)
+	scala.meta.internal.pc.MetalsDriver.run(MetalsDriver.scala:45)
+	scala.meta.internal.pc.HoverProvider$.hover(HoverProvider.scala:34)
+	scala.meta.internal.pc.ScalaPresentationCompiler.hover$$anonfun$1(ScalaPresentationCompiler.scala:342)
+```
+#### Short summary: 
+
+java.util.NoSuchElementException: next on empty iterator
